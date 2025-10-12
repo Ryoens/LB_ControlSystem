@@ -41,8 +41,7 @@ const AdjacencyMatrix: React.FC<AdjacencyMatrixProps> = () => {
 
   return (
     <div className="overflow-auto">
-      <div className="mb-3 text-sm text-gray-600">adjacentList.json から隣接行列を表示</div>
-
+    <div className="mb-3 text-sm text-gray-600">adjacentList.json から隣接行列を表示 — {nodes.length} クラスタ</div>
       <div className="overflow-auto border rounded">
         <table className="table-auto text-sm border-collapse w-full">
           <thead>

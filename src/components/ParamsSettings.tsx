@@ -26,7 +26,6 @@ const rows: ParamRow[] = [
     type: 'float',
     description: 'threshold',
     example: '0.5', 
-    // [int: start, end, step]
   },
   {
     key: 'kappa',
@@ -34,7 +33,6 @@ const rows: ParamRow[] = [
     type: 'float',
     description: 'kappa',
     example: '0.1',
-    // [float: start, end, step]
   },
   {
     key: 'vus',
@@ -42,6 +40,7 @@ const rows: ParamRow[] = [
     type: 'int',
     description: 'concurrent users',
     example: '100',
+    // フラッシュクラウド対象LBに設定する同時接続数, それ以外は1/10とする.
   },
   {
     key: 'attempt',
@@ -55,7 +54,7 @@ const rows: ParamRow[] = [
     name: 'ネットワークモデル',
     type: 'string',
     description: 'NW model',
-    example: 'f',
+    example: 'f, r, ba',
     // [f: fullmesh, r: random, ba: balabasi and albert]
   },
   {
@@ -64,6 +63,7 @@ const rows: ParamRow[] = [
     type: 'int',
     description: 'Number of Web Servers',
     example: '3',
+    // クラスタ内構造の非対称化: 対象クラスタIDとwebサーバ数を指定
   },
   {
     key: 'delay',
@@ -71,6 +71,7 @@ const rows: ParamRow[] = [
     type: 'int',
     description: 'Delay between links',
     example: '10',
+    // 設定方法: 全クラスタで共通(固定, ランダム), 一部クラスタのみ(単一, 複数)
   },
 ];
 
@@ -90,6 +91,7 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
   return (
     <div className="space-y-3 text-sm text-gray-600">
       <p>設定パラメータは以下</p>
+      {/* 最初に方式の選択を行う. これはラジオボタン形式で選択(N-co, LC, DC) */}
 
       <div className="overflow-auto">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
