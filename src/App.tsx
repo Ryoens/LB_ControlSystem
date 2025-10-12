@@ -9,7 +9,7 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <header className="max-w-4xl mx-auto mb-6">
-        <h1 className="text-3xl font-bold">Load Balancing Visualization System Dashboard</h1>
+        <h1 className="text-3xl font-bold">Dashboard</h1>
         <p className="text-sm text-gray-600">負荷分散状態の可視化および実験の自動化</p>
         <p className="text-sm text-gray-600">コンポーネント分割のみ実装, 表示ロジックは未実装</p>
       </header>
