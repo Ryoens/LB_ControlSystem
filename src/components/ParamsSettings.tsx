@@ -8,9 +8,10 @@ type ParamRow = {
   key: string;
   name: string;
   type: string;
-  description: string;
   example: string;
   methods?: ('N-co' | 'LC' | 'DC')[]; // このパラメータが表示される方式
+  tooltip?: string; // インフォメーションアイコンに表示する詳細説明
+  // インフォメーションアイコンの表示位置はもう少し考える
 };
 
 const rows: ParamRow[] = [
@@ -18,56 +19,55 @@ const rows: ParamRow[] = [
     key: 'feedback',
     name: 'フィードバック情報取得間隔',
     type: 'int',
-    description: 'feedback',
     example: '100',
-    methods: ['DC', 'LC'], // DCのみ表示
+    methods: ['DC', 'LC'],
+    tooltip: '隣接ノードからms間隔でセッション数を受信する間隔',
   },
   {
     key: 'threshold',
     name: '閾値（N-co）',
     type: 'float',
-    description: 'threshold',
     example: '0.5',
-    methods: ['N-co'], // N-coのみ表示
+    methods: ['N-co'],
+    tooltip: '自LBの負荷率がこの閾値を超えた場合に隣接LBへ転送を開始',
   },
   {
     key: 'kappa',
     name: '拡散係数（DC）',
     type: 'float',
-    description: 'kappa',
     example: '0.1',
-    methods: ['DC'], // DCのみ表示
+    methods: ['DC'],
+    tooltip: '拡散係数: 大きいほど多くのセッションを隣接LBへ転送',
   },
   {
     key: 'vus',
     name: '同時接続数',
     type: 'int',
-    description: 'concurrent users',
     example: '100',
-    // フラッシュクラウド対象LBに設定する同時接続数, それ以外は1/10とする.
+    tooltip: 'フラッシュクラウド対象LBに設定する同時接続数, それ以外は1/10とする',
   },
   {
     key: 'attempt',
     name: '試行回数',
     type: 'int',
-    description: 'number of attempts',
     example: '5',
+    tooltip: '実験回数',
   },
   {
     key: 'num_cluster',
     name: 'Webサーバ数',
     type: 'int',
-    description: 'Number of Web Servers',
     example: '3',
-    // クラスタ内構造の非対称化: 対象クラスタIDとwebサーバ数を指定
+    tooltip: 'クラスタ内構造の非対称化: 対象クラスタIDとwebサーバ数を指定',
+    // 最初に対称/非対称を選択したのち, 対称時は1つの数値のみ入力. 非対称時はクラスタIDと数値のペアをカンマ区切りで複数入力
   },
   {
     key: 'delay',
     name: '伝搬遅延',
     type: 'int',
-    description: 'Delay between links',
     example: '10',
-    // 設定方法: 全クラスタで共通(固定, ランダム), 一部クラスタのみ(単一, 複数)
+    tooltip: '設定方法: 全クラスタで共通(固定, ランダム), 一部クラスタのみ(単一, 複数)',
+    // 全クラスタ/一部クラスタのみを選択したのち, 分岐
   },
 ];
 
@@ -224,10 +224,10 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
           <thead>
             <tr className="bg-gray-50">
               <th className="px-3 py-2 text-left">名称</th>
-              <th className="px-3 py-2 text-left">説明</th>
               <th className="px-3 py-2 text-left">型</th>
               <th className="px-3 py-2 text-left">設定例</th>
               <th className="px-3 py-2 text-left">入力</th>
+              <th className="px-2 py-2 text-center w-16">説明</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -239,7 +239,6 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
                 return (
                   <tr key={r.key}>
                     <td className="px-3 py-2 align-top text-gray-800">{r.name}</td>
-                    <td className="px-3 py-2 align-top text-gray-700">{r.description}</td>
                     <td className="px-3 py-2 align-top text-gray-600"><code className="bg-gray-100 px-1 rounded">{r.type}</code></td>
                     <td className="px-3 py-2 align-top text-gray-600"><code className="bg-gray-100 px-1 rounded">{r.example}</code></td>
                     <td className="px-3 py-2 align-top">
@@ -251,6 +250,19 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
                         step={step}
                         className="border rounded px-2 py-1 w-full"
                       />
+                    </td>
+                    <td className="px-2 py-2 align-top text-center">
+                      {r.tooltip && (
+                        <div className="relative group inline-block">
+                          <div className="w-5 h-5 rounded-full bg-gray-400 hover:bg-blue-500 text-white flex items-center justify-center cursor-help text-xs font-bold transition-colors">
+                            i
+                          </div>
+                          <div className="absolute right-0 top-7 w-64 bg-gray-800 text-white text-xs rounded-lg p-3 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                            <p>{r.tooltip}</p>
+                            <div className="absolute -top-2 right-3 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-800"></div>
+                          </div>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
