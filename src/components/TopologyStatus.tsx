@@ -135,6 +135,25 @@ const TopologyStatus: React.FC<NetworkTopologyStatus> = () => {
 
   const elements = generateElements();
 
+  // 統計情報を計算する関数
+  const getNetworkStats = () => {
+    const clusterCount = Object.keys(adjacentListData).length;
+    const lbCount = elements.filter(e => e.data.type === 'lb').length;
+    const webServerCount = elements.filter(e => e.data.type === 'web').length;
+    const lbLinkCount = elements.filter(e => e.data.edgeType === 'cluster').length;
+    const avgWebServersPerLB = clusterCount > 0 ? (webServerCount / clusterCount).toFixed(1) : 0;
+
+    return {
+      clusterCount,
+      lbCount,
+      webServerCount,
+      lbLinkCount,
+      avgWebServersPerLB,
+    };
+  };
+
+  const stats = getNetworkStats();
+
   // Cytoscapeのスタイル設定
   const stylesheet: any[] = [
     {
@@ -218,25 +237,31 @@ const TopologyStatus: React.FC<NetworkTopologyStatus> = () => {
       // LBノードを円形に配置
       const lbNodes = cy.nodes('[type="lb"]');
       const lbCount = lbNodes.length;
-      const radius = 200;
+      const lbRadius = 220; // LBを配置する円の半径
       const centerX = 400;
       const centerY = 350;
       
       lbNodes.forEach((node, index) => {
         const angle = (2 * Math.PI * index) / lbCount;
-        const x = centerX + radius * Math.cos(angle);
-        const y = centerY + radius * Math.sin(angle);
-        node.position({ x, y });
+        const lbX = centerX + lbRadius * Math.cos(angle);
+        const lbY = centerY + lbRadius * Math.sin(angle);
+        node.position({ x: lbX, y: lbY });
         
-        // このLBに属するWebサーバを周囲に配置
+        // このLBに属するWebサーバをLBから外側（中心と反対方向）に配置
         const clusterId = node.data('clusterId');
         const webNodes = cy.nodes(`[clusterId="${clusterId}"][type="web"]`);
-        const webRadius = 100;
+        const webDistanceFromLB = 100; // LBからWebサーバまでの距離
         
         webNodes.forEach((webNode, webIndex) => {
-          const webAngle = (2 * Math.PI * webIndex) / webNodes.length + angle;
-          const webX = x + webRadius * Math.cos(webAngle);
-          const webY = y + webRadius * Math.sin(webAngle);
+          // Webサーバの角度を計算
+          // 中心と反対方向（外側）を基準として、左右に配置
+          const baseAngle = angle; // 中心から外側への角度
+          const spread = Math.PI / 3; // Webサーバの配置範囲（60度）
+          const webAngleOffset = (spread * (webIndex - (webNodes.length - 1) / 2)) / (webNodes.length > 1 ? webNodes.length - 1 : 1);
+          const webAngle = baseAngle + webAngleOffset;
+          
+          const webX = lbX + webDistanceFromLB * Math.cos(webAngle);
+          const webY = lbY + webDistanceFromLB * Math.sin(webAngle);
           webNode.position({ x: webX, y: webY });
         });
       });
@@ -285,9 +310,15 @@ const TopologyStatus: React.FC<NetworkTopologyStatus> = () => {
           }}
         />
       </div>
-      <div className="mt-2 text-xs text-gray-600">
-        <p>クラスタ数: {Object.keys(adjacentListData).length}</p>
-        <p>総ノード数: {elements.filter(e => !e.data.source).length}</p>
+      <div className="mt-2 text-xs text-gray-600 space-y-1">
+        <p className="font-semibold">ネットワーク統計:</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <p>クラスタ数: {stats.clusterCount}</p>
+            <p>総Webサーバ数: {stats.webServerCount} （平均: {stats.avgWebServersPerLB}台）</p>
+            <p>LB間リンク数: {stats.lbLinkCount}</p>
+          </div>
+        </div>
       </div>
     </div>
   );
