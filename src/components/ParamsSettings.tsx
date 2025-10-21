@@ -54,15 +54,6 @@ const rows: ParamRow[] = [
     example: '5',
     tooltip: '実験回数',
   },
-
-  {
-    key: 'delay',
-    name: '伝搬遅延',
-    type: 'int',
-    example: '10',
-    tooltip: '設定方法: 全クラスタで共通(固定, ランダム), 一部クラスタのみ(単一, 複数)',
-    // 全クラスタ/一部クラスタのみを選択したのち, 分岐
-  },
 ];
 
 const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
@@ -84,6 +75,55 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
     });
     return initial;
   });
+
+  // 伝搬遅延の単一/複数選択
+  const [delayMode, setDelayMode] = React.useState<'single' | 'multiple'>('single');
+  const [singleDelayType, setSingleDelayType] = React.useState<'fixed' | 'random'>('fixed');
+  const [singleDelay, setSingleDelay] = React.useState('10');
+  const [singleDelayMin, setSingleDelayMin] = React.useState('1');
+  const [singleDelayMax, setSingleDelayMax] = React.useState('5');
+  const [multipleDelays, setMultipleDelays] = React.useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    clusterIds.forEach(clusterId => {
+      initial[clusterId] = '10';
+    });
+    return initial;
+  });
+
+  // リンクごとのランダム遅延値を生成
+  const generateRandomDelays = React.useCallback(() => {
+    const min = parseInt(singleDelayMin) || 0;
+    const max = parseInt(singleDelayMax) || 0;
+    const randomDelays: Record<string, number> = {};
+    const processedLinks = new Set<string>();
+    
+    // adjacentListから全リンクを取得してランダム値を生成（片方向のみ）
+    Object.entries(adjacentList).forEach(([sourceCluster, data]: [string, any]) => {
+      Object.keys(data.adjacentList).forEach((targetCluster) => {
+        // ソートして小さい方を前に持ってくることで一意性を確保
+        const [clusterA, clusterB] = [sourceCluster, targetCluster].sort();
+        const linkKey = `${clusterA} ⇔ ${clusterB}`;
+        
+        // まだ処理していないリンクのみ追加
+        if (!processedLinks.has(linkKey)) {
+          processedLinks.add(linkKey);
+          randomDelays[linkKey] = Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+      });
+    });
+    
+    return randomDelays;
+  }, [singleDelayMin, singleDelayMax]);
+
+  // ランダム遅延値の状態管理
+  const [randomDelayValues, setRandomDelayValues] = React.useState<Record<string, number>>({});
+
+  // ランダムモードに切り替えたとき、または最小値・最大値が変更されたときに再生成
+  React.useEffect(() => {
+    if (singleDelayType === 'random') {
+      setRandomDelayValues(generateRandomDelays());
+    }
+  }, [singleDelayType, singleDelayMin, singleDelayMax, generateRandomDelays]);
   
   // 各パラメータの入力値を管理
   const [values, setValues] = React.useState<Record<string, string>>(() => {
@@ -102,13 +142,29 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
     setAsymmetricWebCounts(prev => ({ ...prev, [clusterId]: value }));
   };
 
+  const handleMultipleDelayChange = (clusterId: string, value: string) => {
+    setMultipleDelays(prev => ({ ...prev, [clusterId]: value }));
+  };
+
   const handleSave = () => {
     const webServerConfig = webServerSymmetry === 'symmetric' 
       ? { symmetry: 'symmetric', count: symmetricWebCount }
       : { symmetry: 'asymmetric', counts: asymmetricWebCounts };
     
-    console.log('保存クリック', { method, nw_model: nwModel, webServerConfig, ...values });
-    setSavedData({ method, nw_model: nwModel, webServerConfig: JSON.stringify(webServerConfig), ...values });
+    const delayConfig = delayMode === 'single'
+      ? (singleDelayType === 'fixed'
+        ? { mode: 'single', type: 'fixed', delay: singleDelay }
+        : { mode: 'single', type: 'random', min: singleDelayMin, max: singleDelayMax, values: randomDelayValues })
+      : { mode: 'multiple', delays: multipleDelays };
+    
+    console.log('保存クリック', { method, nw_model: nwModel, webServerConfig, delayConfig, ...values });
+    setSavedData({ 
+      method, 
+      nw_model: nwModel, 
+      webServerConfig: JSON.stringify(webServerConfig),
+      delayConfig: JSON.stringify(delayConfig),
+      ...values 
+    });
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
@@ -314,6 +370,162 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
           </div>
         )}
       </div>
+
+      {/* 伝搬遅延の設定 */}
+      <div className="border rounded-lg p-4 bg-gray-50">
+        <label className="block font-medium text-gray-700 mb-2">伝搬遅延</label>
+        <div className="flex space-x-6 mb-3">
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="radio"
+              name="delayMode"
+              value="single"
+              checked={delayMode === 'single'}
+              onChange={(e) => setDelayMode(e.target.value as 'single')}
+              className="w-4 h-4 text-blue-600"
+            />
+            <span className="text-gray-700">単一</span>
+          </label>
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="radio"
+              name="delayMode"
+              value="multiple"
+              checked={delayMode === 'multiple'}
+              onChange={(e) => setDelayMode(e.target.value as 'multiple')}
+              className="w-4 h-4 text-blue-600"
+            />
+            <span className="text-gray-700">複数</span>
+          </label>
+          {/* インフォメーションアイコン */}
+          <div className="relative group ml-auto">
+            <div className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center cursor-help text-xs font-bold">
+              i
+            </div>
+            {/* ホバー時の注釈 */}
+            <div className="absolute right-0 top-8 w-64 bg-gray-800 text-white text-xs rounded-lg p-3 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+              <p className="font-semibold mb-1">伝搬遅延設定について</p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>単一: 全クラスタで同じ遅延時間</li>
+                <li>複数: クラスタごとに異なる遅延時間を設定</li>
+              </ul>
+              <div className="absolute -top-2 right-3 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-800"></div>
+            </div>
+          </div>
+        </div>
+
+        {/* 単一の場合: 固定/ランダムの選択 */}
+        {delayMode === 'single' && (
+          <div className="mt-3 space-y-3">
+            <div className="flex space-x-6">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="singleDelayType"
+                  value="fixed"
+                  checked={singleDelayType === 'fixed'}
+                  onChange={(e) => setSingleDelayType(e.target.value as 'fixed')}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <span className="text-gray-700">固定</span>
+              </label>
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="singleDelayType"
+                  value="random"
+                  checked={singleDelayType === 'random'}
+                  onChange={(e) => setSingleDelayType(e.target.value as 'random')}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <span className="text-gray-700">ランダム</span>
+              </label>
+            </div>
+
+            {/* 固定の場合 */}
+            {singleDelayType === 'fixed' && (
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">伝搬遅延 (ms)</label>
+                <input
+                  type="number"
+                  value={singleDelay}
+                  onChange={(e) => setSingleDelay(e.target.value)}
+                  min="0"
+                  step="1"
+                  className="border rounded px-3 py-2 w-32"
+                />
+              </div>
+            )}
+
+            {/* ランダムの場合 */}
+            {singleDelayType === 'random' && (
+              <div className="space-y-2">
+                <div className="flex items-center space-x-3">
+                  <label className="block text-sm text-gray-700 w-20">最小値 (ms)</label>
+                  <input
+                    type="number"
+                    value={singleDelayMin}
+                    onChange={(e) => setSingleDelayMin(e.target.value)}
+                    min="0"
+                    step="1"
+                    className="border rounded px-3 py-2 w-24"
+                  />
+                </div>
+                <div className="flex items-center space-x-3">
+                  <label className="block text-sm text-gray-700 w-20">最大値 (ms)</label>
+                  <input
+                    type="number"
+                    value={singleDelayMax}
+                    onChange={(e) => setSingleDelayMax(e.target.value)}
+                    min="0"
+                    step="1"
+                    className="border rounded px-3 py-2 w-24"
+                  />
+                </div>
+                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded">
+                  <div className="font-medium text-sm text-gray-700 mb-2">リンクごとの遅延値:</div>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-700">
+                    {Object.entries(randomDelayValues).map(([link, delay]) => (
+                      <div key={link} className="flex justify-between bg-white px-2 py-1 rounded border border-blue-100">
+                        <span className="font-mono">{link}</span>
+                        <span className="font-semibold text-blue-600">{delay}ms</span>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRandomDelayValues(generateRandomDelays())}
+                    className="mt-2 text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
+                  >
+                    再生成
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 複数の場合: クラスタごとの入力フィールド */}
+        {delayMode === 'multiple' && (
+          <div className="mt-3 space-y-2">
+            <p className="text-sm text-gray-700 mb-2">各クラスタの伝搬遅延 (ms)</p>
+            {clusterIds.map((clusterId) => (
+              <div key={clusterId} className="flex items-center space-x-3">
+                <label className="text-sm text-gray-700 w-24">{clusterId}:</label>
+                <input
+                  type="number"
+                  value={multipleDelays[clusterId] || '10'}
+                  onChange={(e) => handleMultipleDelayChange(clusterId, e.target.value)}
+                  min="0"
+                  step="1"
+                  className="border rounded px-3 py-2 w-24"
+                />
+                <span className="text-xs text-gray-500">ms</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       
       <div className="overflow-auto">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -424,6 +636,44 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
                         {Object.entries(config.counts).map(([clusterId, count]) => (
                           <div key={clusterId} className="ml-4">
                             {clusterId}: {count as string}台
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+                })()}
+              </div>
+            </div>
+            <div className="flex">
+              <span className="font-medium text-gray-700 w-48">伝搬遅延:</span>
+              <div className="text-gray-900">
+                {savedData.delayConfig && (() => {
+                  const config = JSON.parse(savedData.delayConfig);
+                  if (config.mode === 'single') {
+                    if (config.type === 'fixed') {
+                      return <span>単一 (固定): {config.delay}ms</span>;
+                    } else {
+                      return (
+                        <div className="space-y-1">
+                          <span>単一 (ランダム): {config.min}ms ～ {config.max}ms</span>
+                          <div className="ml-4 mt-1 text-xs">
+                            {Object.entries(config.values).map(([link, delay]) => (
+                              <div key={link} className="flex justify-between max-w-md">
+                                <span className="font-mono">{link}: </span>
+                                <span className="font-semibold">{delay as number}ms</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+                  } else {
+                    return (
+                      <div className="space-y-1">
+                        <span>複数:</span>
+                        {Object.entries(config.delays).map(([clusterId, delay]) => (
+                          <div key={clusterId} className="ml-4">
+                            {clusterId}: {delay as string}ms
                           </div>
                         ))}
                       </div>
