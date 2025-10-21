@@ -76,6 +76,26 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
     return initial;
   });
 
+  // 全リンクのリストを生成（片方向のみ）
+  const allLinks = React.useMemo(() => {
+    const links: string[] = [];
+    const processedLinks = new Set<string>();
+    
+    Object.entries(adjacentList).forEach(([sourceCluster, data]: [string, any]) => {
+      Object.keys(data.adjacentList).forEach((targetCluster) => {
+        const [clusterA, clusterB] = [sourceCluster, targetCluster].sort();
+        const linkKey = `${clusterA} ⇔ ${clusterB}`;
+        
+        if (!processedLinks.has(linkKey)) {
+          processedLinks.add(linkKey);
+          links.push(linkKey);
+        }
+      });
+    });
+    
+    return links.sort();
+  }, []);
+
   // 伝搬遅延の単一/複数選択
   const [delayMode, setDelayMode] = React.useState<'single' | 'multiple'>('single');
   const [singleDelayType, setSingleDelayType] = React.useState<'fixed' | 'random'>('fixed');
@@ -84,9 +104,20 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
   const [singleDelayMax, setSingleDelayMax] = React.useState('5');
   const [multipleDelays, setMultipleDelays] = React.useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
-    clusterIds.forEach(clusterId => {
-      initial[clusterId] = '10';
+    const processedLinks = new Set<string>();
+    
+    Object.entries(adjacentList).forEach(([sourceCluster, data]: [string, any]) => {
+      Object.keys(data.adjacentList).forEach((targetCluster) => {
+        const [clusterA, clusterB] = [sourceCluster, targetCluster].sort();
+        const linkKey = `${clusterA} ⇔ ${clusterB}`;
+        
+        if (!processedLinks.has(linkKey)) {
+          processedLinks.add(linkKey);
+          initial[linkKey] = '1';
+        }
+      });
     });
+    
     return initial;
   });
 
@@ -142,8 +173,8 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
     setAsymmetricWebCounts(prev => ({ ...prev, [clusterId]: value }));
   };
 
-  const handleMultipleDelayChange = (clusterId: string, value: string) => {
-    setMultipleDelays(prev => ({ ...prev, [clusterId]: value }));
+  const handleMultipleDelayChange = (linkKey: string, value: string) => {
+    setMultipleDelays(prev => ({ ...prev, [linkKey]: value }));
   };
 
   const handleSave = () => {
@@ -505,17 +536,17 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
           </div>
         )}
 
-        {/* 複数の場合: クラスタごとの入力フィールド */}
+        {/* 複数の場合: リンクごとの入力フィールド */}
         {delayMode === 'multiple' && (
           <div className="mt-3 space-y-2">
-            <p className="text-sm text-gray-700 mb-2">各クラスタの伝搬遅延 (ms)</p>
-            {clusterIds.map((clusterId) => (
-              <div key={clusterId} className="flex items-center space-x-3">
-                <label className="text-sm text-gray-700 w-24">{clusterId}:</label>
+            <p className="text-sm text-gray-700 mb-2">各リンクの伝搬遅延 (ms)</p>
+            {allLinks.map((linkKey) => (
+              <div key={linkKey} className="flex items-center space-x-3">
+                <label className="text-sm text-gray-700 font-mono w-56">{linkKey}:</label>
                 <input
                   type="number"
-                  value={multipleDelays[clusterId] || '10'}
-                  onChange={(e) => handleMultipleDelayChange(clusterId, e.target.value)}
+                  value={multipleDelays[linkKey] || '1'}
+                  onChange={(e) => handleMultipleDelayChange(linkKey, e.target.value)}
                   min="0"
                   step="1"
                   className="border rounded px-3 py-2 w-24"
@@ -670,12 +701,14 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
                   } else {
                     return (
                       <div className="space-y-1">
-                        <span>複数:</span>
-                        {Object.entries(config.delays).map(([clusterId, delay]) => (
-                          <div key={clusterId} className="ml-4">
-                            {clusterId}: {delay as string}ms
-                          </div>
-                        ))}
+                        <span>複数 (リンクごと):</span>
+                        <div className="ml-4 mt-1 text-xs space-y-0.5">
+                          {Object.entries(config.delays).map(([linkKey, delay]) => (
+                            <div key={linkKey}>
+                              <span className="font-mono">{linkKey}: {delay as string}ms</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     );
                   }
