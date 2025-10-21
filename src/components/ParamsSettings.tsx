@@ -1,4 +1,5 @@
 import React from 'react';
+import adjacentList from '../data/adjacentList.json';
 
 type ParamsSettingsProps = {
   // 将来的に設定値やコールバックを受け取る
@@ -53,14 +54,7 @@ const rows: ParamRow[] = [
     example: '5',
     tooltip: '実験回数',
   },
-  {
-    key: 'num_cluster',
-    name: 'Webサーバ数',
-    type: 'int',
-    example: '3',
-    tooltip: 'クラスタ内構造の非対称化: 対象クラスタIDとwebサーバ数を指定',
-    // 最初に対称/非対称を選択したのち, 対称時は1つの数値のみ入力. 非対称時はクラスタIDと数値のペアをカンマ区切りで複数入力
-  },
+
   {
     key: 'delay',
     name: '伝搬遅延',
@@ -77,6 +71,20 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
   const [nwModel, setNwModel] = React.useState<'f' | 'r' | 'ba'>('f');
   const [savedData, setSavedData] = React.useState<Record<string, string> | null>(null);
   
+  // adjacentList.jsonからクラスタIDを動的に取得
+  const clusterIds = React.useMemo(() => Object.keys(adjacentList), []);
+  
+  // Webサーバ数の対称/非対称選択
+  const [webServerSymmetry, setWebServerSymmetry] = React.useState<'symmetric' | 'asymmetric'>('symmetric');
+  const [symmetricWebCount, setSymmetricWebCount] = React.useState('3');
+  const [asymmetricWebCounts, setAsymmetricWebCounts] = React.useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    clusterIds.forEach(clusterId => {
+      initial[clusterId] = '3';
+    });
+    return initial;
+  });
+  
   // 各パラメータの入力値を管理
   const [values, setValues] = React.useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
@@ -90,9 +98,17 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
     setValues(prev => ({ ...prev, [key]: value }));
   };
 
+  const handleAsymmetricWebCountChange = (clusterId: string, value: string) => {
+    setAsymmetricWebCounts(prev => ({ ...prev, [clusterId]: value }));
+  };
+
   const handleSave = () => {
-    console.log('保存クリック', { method, nw_model: nwModel, ...values });
-    setSavedData({ method, nw_model: nwModel, ...values });
+    const webServerConfig = webServerSymmetry === 'symmetric' 
+      ? { symmetry: 'symmetric', count: symmetricWebCount }
+      : { symmetry: 'asymmetric', counts: asymmetricWebCounts };
+    
+    console.log('保存クリック', { method, nw_model: nwModel, webServerConfig, ...values });
+    setSavedData({ method, nw_model: nwModel, webServerConfig: JSON.stringify(webServerConfig), ...values });
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
@@ -218,6 +234,86 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
         </div>
         <p className="text-xs text-gray-500 mt-2">選択中: {nwModel}</p>
       </div>
+
+      {/* Webサーバ数の設定 */}
+      <div className="border rounded-lg p-4 bg-gray-50">
+        <label className="block font-medium text-gray-700 mb-2">Webサーバ数</label>
+        <div className="flex space-x-6 mb-3">
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="radio"
+              name="webServerSymmetry"
+              value="symmetric"
+              checked={webServerSymmetry === 'symmetric'}
+              onChange={(e) => setWebServerSymmetry(e.target.value as 'symmetric')}
+              className="w-4 h-4 text-blue-600"
+            />
+            <span className="text-gray-700">対称</span>
+          </label>
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="radio"
+              name="webServerSymmetry"
+              value="asymmetric"
+              checked={webServerSymmetry === 'asymmetric'}
+              onChange={(e) => setWebServerSymmetry(e.target.value as 'asymmetric')}
+              className="w-4 h-4 text-blue-600"
+            />
+            <span className="text-gray-700">非対称</span>
+          </label>
+          {/* インフォメーションアイコン */}
+          <div className="relative group ml-auto">
+            <div className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center cursor-help text-xs font-bold">
+              i
+            </div>
+            {/* ホバー時の注釈 */}
+            <div className="absolute right-0 top-8 w-64 bg-gray-800 text-white text-xs rounded-lg p-3 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+              <p className="font-semibold mb-1">Webサーバ数設定について</p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>対称: 全クラスタで同じWebサーバ数</li>
+                <li>非対称: クラスタごとに異なるWebサーバ数を設定</li>
+              </ul>
+              <div className="absolute -top-2 right-3 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-800"></div>
+            </div>
+          </div>
+        </div>
+
+        {/* 対称の場合: 1つの入力フィールド */}
+        {webServerSymmetry === 'symmetric' && (
+          <div className="mt-3">
+            <label className="block text-sm text-gray-700 mb-1">全クラスタのWebサーバ数</label>
+            <input
+              type="number"
+              value={symmetricWebCount}
+              onChange={(e) => setSymmetricWebCount(e.target.value)}
+              min="1"
+              step="1"
+              className="border rounded px-3 py-2 w-32"
+            />
+          </div>
+        )}
+
+        {/* 非対称の場合: クラスタごとの入力フィールド */}
+        {webServerSymmetry === 'asymmetric' && (
+          <div className="mt-3 space-y-2">
+            <p className="text-sm text-gray-700 mb-2">各クラスタのWebサーバ数</p>
+            {clusterIds.map((clusterId) => (
+              <div key={clusterId} className="flex items-center space-x-3">
+                <label className="text-sm text-gray-700 w-24">{clusterId}:</label>
+                <input
+                  type="number"
+                  value={asymmetricWebCounts[clusterId] || '3'}
+                  onChange={(e) => handleAsymmetricWebCountChange(clusterId, e.target.value)}
+                  min="1"
+                  step="1"
+                  className="border rounded px-3 py-2 w-24"
+                />
+                <span className="text-xs text-gray-500">台</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       
       <div className="overflow-auto">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -313,6 +409,28 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
                 {savedData.nw_model === 'r' && 'Random'}
                 {savedData.nw_model === 'ba' && 'Barabási-Albert'}
               </span>
+            </div>
+            <div className="flex">
+              <span className="font-medium text-gray-700 w-48">Webサーバ数:</span>
+              <div className="text-gray-900">
+                {savedData.webServerConfig && (() => {
+                  const config = JSON.parse(savedData.webServerConfig);
+                  if (config.symmetry === 'symmetric') {
+                    return <span>対称: {config.count}台</span>;
+                  } else {
+                    return (
+                      <div className="space-y-1">
+                        <span>非対称:</span>
+                        {Object.entries(config.counts).map(([clusterId, count]) => (
+                          <div key={clusterId} className="ml-4">
+                            {clusterId}: {count as string}台
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+                })()}
+              </div>
             </div>
             {rows.map((r) => (
               <div key={r.key} className="flex">
