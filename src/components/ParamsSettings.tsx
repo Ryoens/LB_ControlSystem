@@ -61,6 +61,10 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
   const [method, setMethod] = React.useState<'N-co' | 'LC' | 'DC'>('DC');
   const [nwModel, setNwModel] = React.useState<'f' | 'r' | 'ba'>('f');
   const [savedData, setSavedData] = React.useState<Record<string, string> | null>(null);
+  // 実行時メッセージ
+  const [runMessage, setRunMessage] = React.useState<string | null>(null);
+  // 実行コマンドの出力
+  const [runOutput, setRunOutput] = React.useState<string | null>(null);
   
   // adjacentList.jsonからクラスタIDを動的に取得
   const clusterIds = React.useMemo(() => Object.keys(adjacentList), []);
@@ -201,7 +205,34 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
   };
 
   const handleDryRun = () => {
-    console.log('仮の実行クリック');
+    // 保存済み設定があるか確認
+    if (!savedData) {
+      setRunMessage('まず保存してください');
+    } else {
+      setRunMessage('実行します');
+      setRunOutput(null);
+      // サーバー側で make web を実行するエンドポイントを叩く
+      fetch('http://localhost:4000/api/exec')
+        .then((res) => res.json())
+        .then((json) => {
+          if (json && json.success) {
+            // show combined stdout + stderr (if any) without exit code
+            const out = (json.stdout || '') + (json.stderr ? '\n[stderr]\n' + json.stderr : '');
+            setRunOutput(out.trim() || '(no output)');
+            console.log('実行結果', json.stdout);
+          } else {
+            setRunOutput(json.error || JSON.stringify(json));
+            console.error('実行エラー', json);
+          }
+        })
+        .catch((err) => {
+          setRunOutput(String(err));
+          console.error('fetch error', err);
+        });
+    }
+
+    // メッセージは3秒で消す
+    setTimeout(() => setRunMessage(null), 3000);
   };
 
   return (
@@ -635,6 +666,23 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
           </button>
         </div>
       </div>
+      {/* 実行メッセージ表示 */}
+      {runMessage && (
+        <div className="mt-2">
+          <div className={
+            `text-sm py-1 px-3 rounded ${runMessage === 'まず保存してください' ? 'bg-red-50 text-red-700 border border-red-100' : 'bg-green-50 text-green-700 border border-green-100'}`
+          }>
+            {runMessage}
+          </div>
+        </div>
+      )}
+      {runOutput && (
+        <div className="mt-2">
+          <div className="bg-gray-900 text-white text-xs font-mono p-2 rounded">
+            {runOutput}
+          </div>
+        </div>
+      )}
 
       {/* 保存された内容の表示 */}
       {savedData && (
