@@ -1,8 +1,14 @@
 const http = require('http');
 const { spawn } = require('child_process');
 const path = require('path');
+const url = require('url');
 
 const PORT = process.env.PORT || 4000;
+
+// ホワイトリスト: 許可するコマンドとその引数を厳密に定義
+const ALLOWED_COMMANDS = {
+  'make web': { program: 'make', args: ['web'] },
+};
 
 // helper to send JSON with CORS
 function sendJson(res, statusCode, obj) {
@@ -13,15 +19,35 @@ function sendJson(res, statusCode, obj) {
 }
 
 const server = http.createServer((req, res) => {
-  // simple routing: GET /api/make-web runs `make web` in ../../custom_weightedRR
-  if (req.method === 'GET' && (req.url === '/api/exec' || req.url === '/exec')) {
+  // simple routing: GET /api/exec?cmd=<command> runs whitelisted command in ../../custom_weightedRR
+  if (req.method === 'GET' && (req.url.startsWith('/api/exec') || req.url.startsWith('/exec'))) {
+    const parsedUrl = url.parse(req.url, true);
+    const commandKey = parsedUrl.query.cmd || 'make web'; // デフォルトは make web
+    
+    // 入力値の型チェック（追加のセキュリティ層）
+    if (typeof commandKey !== 'string') {
+      sendJson(res, 400, { success: false, error: 'Invalid command format' });
+      return;
+    }
+    
+    // ホワイトリストチェック（厳密な一致のみ）
+    if (!ALLOWED_COMMANDS.hasOwnProperty(commandKey)) {
+      sendJson(res, 403, { 
+        success: false, 
+        error: `Command not allowed: ${commandKey}`,
+        allowedCommands: Object.keys(ALLOWED_COMMANDS)
+      });
+      return;
+    }
+    
+    const commandConfig = ALLOWED_COMMANDS[commandKey];
     const cwd = path.resolve(__dirname, '..', '..', 'custom_weightedRR');
     
-    console.log('Attempting to execute make web');
+    console.log('Attempting to execute:', commandConfig.program, commandConfig.args);
     console.log('Target directory:', cwd);
 
-    // Spawn bash to run `make web`
-    const cmd = spawn('/bin/bash', ['-c', 'make web'], { cwd });
+    // Spawn without shell - 引数を配列で渡すことでインジェクションを防ぐ
+    const cmd = spawn(commandConfig.program, commandConfig.args, { cwd });
     let stdout = '';
     let stderr = '';
 

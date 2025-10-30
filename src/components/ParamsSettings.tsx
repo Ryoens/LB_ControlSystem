@@ -211,8 +211,9 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
     } else {
       setRunMessage('実行します');
       setRunOutput(null);
-      // サーバー側で make web を実行するエンドポイントを叩く
-      fetch('http://localhost:4000/api/exec')
+      // サーバー側で make web を実行するエンドポイントを叩く（将来的にコマンドを変更可能）
+      const command = 'make web'; // 将来的にUIから選択可能にする
+      fetch(`http://localhost:4000/api/exec?cmd=${encodeURIComponent(command)}`)
         .then((res) => res.json())
         .then((json) => {
           if (json && json.success) {
