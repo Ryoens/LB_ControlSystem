@@ -11,7 +11,6 @@ const App: React.FC = () => {
       <header className="max-w-4xl mx-auto mb-6">
         <h1 className="text-3xl font-bold">Dashboard</h1>
         <p className="text-sm text-gray-600">負荷分散状態の可視化および実験の自動化</p>
-        <p className="text-sm text-gray-600">コンポーネント分割のみ実装, 表示ロジックは未実装</p>
       </header>
 
       <main className="max-w-4xl mx-auto space-y-6">
