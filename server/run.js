@@ -3,11 +3,11 @@ const { spawn } = require('child_process');
 const path = require('path');
 const url = require('url');
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 5000;
 
 // ホワイトリスト: 許可するコマンドとその引数を厳密に定義
 const ALLOWED_COMMANDS = {
-  'make web': { program: 'make', args: ['web'] },
+  'make_web': { program: 'make', args: ['web'] },
 };
 
 // helper to send JSON with CORS
@@ -22,7 +22,10 @@ const server = http.createServer((req, res) => {
   // simple routing: GET /api/exec?cmd=<command> runs whitelisted command in ../../custom_weightedRR
   if (req.method === 'GET' && (req.url.startsWith('/api/exec') || req.url.startsWith('/exec'))) {
     const parsedUrl = url.parse(req.url, true);
-    const commandKey = parsedUrl.query.cmd || 'make web'; // デフォルトは make web
+    const commandKey = parsedUrl.query.cmd || 'make_web'; // デフォルトは make_web
+    
+    console.log('Received command key:', JSON.stringify(commandKey));
+    console.log('Available commands:', Object.keys(ALLOWED_COMMANDS));
     
     // 入力値の型チェック（追加のセキュリティ層）
     if (typeof commandKey !== 'string') {
@@ -32,6 +35,7 @@ const server = http.createServer((req, res) => {
     
     // ホワイトリストチェック（厳密な一致のみ）
     if (!ALLOWED_COMMANDS.hasOwnProperty(commandKey)) {
+      console.log('Command not in whitelist. Received:', JSON.stringify(commandKey));
       sendJson(res, 403, { 
         success: false, 
         error: `Command not allowed: ${commandKey}`,

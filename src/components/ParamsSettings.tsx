@@ -65,6 +65,8 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
   const [runMessage, setRunMessage] = React.useState<string | null>(null);
   // 実行コマンドの出力
   const [runOutput, setRunOutput] = React.useState<string | null>(null);
+  // APIサーバー接続状態
+  const [apiServerStatus, setApiServerStatus] = React.useState<'checking' | 'connected' | 'disconnected'>('checking');
   
   // adjacentList.jsonからクラスタIDを動的に取得
   const clusterIds = React.useMemo(() => Object.keys(adjacentList), []);
@@ -159,6 +161,34 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
       setRandomDelayValues(generateRandomDelays());
     }
   }, [singleDelayType, singleDelayMin, singleDelayMax, generateRandomDelays]);
+
+  // APIサーバーの接続状態を定期的にチェック
+  React.useEffect(() => {
+    const checkApiServer = async () => {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        
+        const response = await fetch('http://localhost:5000/api/exec?cmd=make_web', {
+          method: 'GET',
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        setApiServerStatus(response.status === 200 || response.status === 403 ? 'connected' : 'disconnected');
+      } catch (error) {
+        setApiServerStatus('disconnected');
+      }
+    };
+
+    // 初回チェック
+    checkApiServer();
+
+    // 10秒ごとにチェック
+    const interval = setInterval(checkApiServer, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
   
   // 各パラメータの入力値を管理
   const [values, setValues] = React.useState<Record<string, string>>(() => {
@@ -212,8 +242,8 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
       setRunMessage('実行します');
       setRunOutput(null);
       // サーバー側で make web を実行するエンドポイントを叩く（将来的にコマンドを変更可能）
-      const command = 'make web'; // 将来的にUIから選択可能にする
-      fetch(`http://localhost:4000/api/exec?cmd=${encodeURIComponent(command)}`)
+      const command = 'make_web'; // 将来的にUIから選択可能にする
+      fetch(`http://localhost:5000/api/exec?cmd=${encodeURIComponent(command)}`)
         .then((res) => res.json())
         .then((json) => {
           if (json && json.success) {
@@ -665,6 +695,20 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
           >
             実行
           </button>
+        </div>
+
+        {/* APIサーバー接続状態表示 */}
+        <div className="flex items-center space-x-2 ml-4">
+          <div className={`w-3 h-3 rounded-full ${
+            apiServerStatus === 'connected' ? 'bg-green-500' :
+            apiServerStatus === 'disconnected' ? 'bg-red-500' :
+            'bg-yellow-500 animate-pulse'
+          }`} />
+          <span className="text-xs text-gray-600">
+            {apiServerStatus === 'connected' ? 'APIサーバー接続中' :
+             apiServerStatus === 'disconnected' ? 'APIサーバー切断' :
+             '接続確認中...'}
+          </span>
         </div>
       </div>
       {/* 実行メッセージ表示 */}
