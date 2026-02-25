@@ -38,7 +38,20 @@ const DockerStatus: React.FC = () => {
   const [dockerStatus, setDockerStatus] = useState<DockerStatusMessage | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedLBs, setExpandedLBs] = useState<Set<string>>(new Set());
   const wsRef = useRef<WebSocket | null>(null);
+
+  const toggleLB = (lbId: string) => {
+    setExpandedLBs(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(lbId)) {
+        newSet.delete(lbId);
+      } else {
+        newSet.add(lbId);
+      }
+      return newSet;
+    });
+  };
 
   useEffect(() => {
     const connectWebSocket = () => {
@@ -129,8 +142,75 @@ const DockerStatus: React.FC = () => {
     );
   }
 
+  // コンテナをフィルタリング（web, LB, redis-serverのみ）
+  const filteredContainers = dockerStatus.containers.filter(c => 
+    c.name.toLowerCase().includes('web') || 
+    c.name.toLowerCase().includes('lb') || 
+    c.name.toLowerCase().includes('redis-server')
+  );
+
+  // LBコンテナとWebコンテナを分類
+  const lbContainers = filteredContainers.filter(c => 
+    c.name.toLowerCase().includes('lb') && !c.name.toLowerCase().includes('web')
+  );
+  const webContainers = filteredContainers.filter(c => 
+    c.name.toLowerCase().includes('web')
+  );
+  const redisContainers = filteredContainers.filter(c => 
+    c.name.toLowerCase().includes('redis-server')
+  );
+
+  const renderContainerRow = (container: ContainerInfo, isNested: boolean = false) => {
+    const stats = dockerStatus.stats.find(s => s.id === container.id);
+    return (
+      <tr key={container.id} className={`hover:bg-gray-50 ${isNested ? 'bg-blue-50' : ''}`}>
+        <td className={`px-4 py-3 ${isNested ? 'pl-12' : ''}`}>
+          <div className="font-medium text-gray-900">{container.name}</div>
+          <div className="text-xs text-gray-500">{container.id}</div>
+        </td>
+        <td className="px-4 py-3">
+          <span className={`px-2 py-1 text-xs font-medium rounded ${getStateColor(container.state)}`}>
+            {container.state}
+          </span>
+        </td>
+        <td className="px-4 py-3 text-gray-700 truncate max-w-xs" title={container.image}>
+          {container.image}
+        </td>
+        <td className="px-4 py-3">
+          {stats ? (
+            <div className="text-gray-900 font-medium">{stats.cpuPercent.toFixed(2)}%</div>
+          ) : (
+            <span className="text-gray-400">-</span>
+          )}
+        </td>
+        <td className="px-4 py-3">
+          {stats ? (
+            <div>
+              <div className="text-gray-900 font-medium">{stats.memoryPercent.toFixed(2)}%</div>
+              <div className="text-xs text-gray-500">
+                {formatBytes(stats.memoryUsage)} / {formatBytes(stats.memoryLimit)}
+              </div>
+            </div>
+          ) : (
+            <span className="text-gray-400">-</span>
+          )}
+        </td>
+        <td className="px-4 py-3">
+          {stats ? (
+            <div className="text-xs">
+              <div className="text-gray-600">↓ {formatBytes(stats.networkRx)}</div>
+              <div className="text-gray-600">↑ {formatBytes(stats.networkTx)}</div>
+            </div>
+          ) : (
+            <span className="text-gray-400">-</span>
+          )}
+        </td>
+      </tr>
+    );
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
@@ -143,75 +223,134 @@ const DockerStatus: React.FC = () => {
         </span>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">名前</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">状態</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">イメージ</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">CPU</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">メモリ</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">ネットワーク</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {dockerStatus.containers.map((container) => {
-              const stats = dockerStatus.stats.find(s => s.id === container.id);
-              return (
-                <tr key={container.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-gray-900">{container.name}</div>
-                    <div className="text-xs text-gray-500">{container.id}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 text-xs font-medium rounded ${getStateColor(container.state)}`}>
-                      {container.state}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-700 truncate max-w-xs" title={container.image}>
-                    {container.image}
-                  </td>
-                  <td className="px-4 py-3">
-                    {stats ? (
-                      <div className="flex items-center gap-2">
-                        <div className="text-gray-900 font-medium">{stats.cpuPercent.toFixed(2)}%</div>
-                      </div>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {stats ? (
-                      <div>
-                        <div className="text-gray-900 font-medium">{stats.memoryPercent.toFixed(2)}%</div>
-                        <div className="text-xs text-gray-500">
-                          {formatBytes(stats.memoryUsage)} / {formatBytes(stats.memoryLimit)}
+      {/* Prototype Section */}
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-blue-100 px-4 py-2 border-b border-gray-200">
+          <h3 className="font-semibold text-gray-800">Prototype</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">名前</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">状態</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">イメージ</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">CPU</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">メモリ</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">ネットワーク</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {lbContainers.map((lbContainer) => {
+                const isExpanded = expandedLBs.has(lbContainer.id);
+                // LBに関連するWebコンテナを取得（名前の一部が一致する場合）
+                const relatedWebs = webContainers.filter(web => {
+                  // LB名からLBプレフィックスを除去して、Webコンテナ名と照合
+                  const lbBaseName = lbContainer.name.replace(/lb/i, '');
+                  return web.name.toLowerCase().includes(lbBaseName.toLowerCase());
+                });
+
+                return (
+                  <React.Fragment key={lbContainer.id}>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => toggleLB(lbContainer.id)}
+                            className="text-gray-500 hover:text-gray-700 focus:outline-none"
+                          >
+                            <svg
+                              className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                          <div>
+                            <div className="font-medium text-gray-900">{lbContainer.name}</div>
+                            <div className="text-xs text-gray-500">{lbContainer.id}</div>
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {stats ? (
-                      <div className="text-xs">
-                        <div className="text-gray-600">↓ {formatBytes(stats.networkRx)}</div>
-                        <div className="text-gray-600">↑ {formatBytes(stats.networkTx)}</div>
-                      </div>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 text-xs font-medium rounded ${getStateColor(lbContainer.state)}`}>
+                          {lbContainer.state}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-700 truncate max-w-xs" title={lbContainer.image}>
+                        {lbContainer.image}
+                      </td>
+                      <td className="px-4 py-3">
+                        {dockerStatus.stats.find(s => s.id === lbContainer.id) ? (
+                          <div className="text-gray-900 font-medium">
+                            {dockerStatus.stats.find(s => s.id === lbContainer.id)!.cpuPercent.toFixed(2)}%
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {dockerStatus.stats.find(s => s.id === lbContainer.id) ? (
+                          <div>
+                            <div className="text-gray-900 font-medium">
+                              {dockerStatus.stats.find(s => s.id === lbContainer.id)!.memoryPercent.toFixed(2)}%
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {formatBytes(dockerStatus.stats.find(s => s.id === lbContainer.id)!.memoryUsage)} / {formatBytes(dockerStatus.stats.find(s => s.id === lbContainer.id)!.memoryLimit)}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {dockerStatus.stats.find(s => s.id === lbContainer.id) ? (
+                          <div className="text-xs">
+                            <div className="text-gray-600">↓ {formatBytes(dockerStatus.stats.find(s => s.id === lbContainer.id)!.networkRx)}</div>
+                            <div className="text-gray-600">↑ {formatBytes(dockerStatus.stats.find(s => s.id === lbContainer.id)!.networkTx)}</div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                    </tr>
+                    {isExpanded && relatedWebs.map(web => renderContainerRow(web, true))}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Deployment Section */}
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-green-100 px-4 py-2 border-b border-gray-200">
+          <h3 className="font-semibold text-gray-800">Deployment</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">名前</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">状態</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">イメージ</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">CPU</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">メモリ</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">ネットワーク</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {redisContainers.map(container => renderContainerRow(container))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="text-xs text-gray-500 mt-4">
-        合計 {dockerStatus.containers.length} コンテナ（実行中: {dockerStatus.containers.filter(c => c.state === 'running').length}）
+        合計 {filteredContainers.length} コンテナ（実行中: {filteredContainers.filter(c => c.state === 'running').length}）
       </div>
     </div>
   );
