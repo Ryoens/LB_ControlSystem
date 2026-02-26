@@ -169,7 +169,7 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 2000);
         
-        const response = await fetch('http://localhost:5000/api/exec?cmd=make_web', {
+        const response = await fetch('/api/exec?cmd=make_web', {
           method: 'GET',
           signal: controller.signal,
         });
@@ -243,7 +243,7 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = () => {
       setRunOutput(null);
       // サーバー側で make web を実行するエンドポイントを叩く（将来的にコマンドを変更可能）
       const command = 'make_web'; // 将来的にUIから選択可能にする
-      fetch(`http://localhost:5000/api/exec?cmd=${encodeURIComponent(command)}`)
+      fetch(`/api/exec?cmd=${encodeURIComponent(command)}`)
         .then((res) => res.json())
         .then((json) => {
           if (json && json.success) {
